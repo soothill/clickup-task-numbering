@@ -21,9 +21,10 @@ show_help() {
     cat << EOF
 ${GREEN}ClickUp Task Numbering Script${NC}
 
-Numbers ClickUp epics and tasks with incremental numbering:
+Numbers ClickUp epics and tasks with incremental numbering using a custom field:
 - Epics are numbered in increments of 10 (10, 20, 30, etc.)
 - Tasks under each epic are numbered with decimal sub-numbers (10.1, 10.2, etc.)
+- Updates a custom field (default: PM.Prio) rather than task names
 
 ${YELLOW}USAGE:${NC}
     $(basename "$0") [OPTIONS] [LIST_ID]
@@ -33,9 +34,10 @@ ${YELLOW}ENVIRONMENT VARIABLES:${NC}
     CLICKUP_LIST_ID    Default ClickUp list ID to process (optional)
 
 ${YELLOW}OPTIONS:${NC}
-    -h, --help         Show this help message
-    -d, --dry-run      Preview changes without applying them
-    -l, --list-id ID   Specify the list ID (overrides CLICKUP_LIST_ID env var)
+    -h, --help           Show this help message
+    -d, --dry-run        Preview changes without applying them
+    -l, --list-id ID     Specify the list ID (overrides CLICKUP_LIST_ID env var)
+    -f, --field-name NAME  Custom field name to update (default: PM.Prio)
 
 ${YELLOW}ARGUMENTS:${NC}
     LIST_ID            ClickUp list ID to process (overrides CLICKUP_LIST_ID env var)
@@ -61,6 +63,9 @@ ${YELLOW}EXAMPLES:${NC}
     # Combine all options
     $(basename "$0") --dry-run --list-id 123456789
 
+    # Use a different custom field
+    $(basename "$0") --field-name "Priority" 123456789
+
 ${YELLOW}SETUP:${NC}
     1. Get your ClickUp API token from: https://app.clickup.com/settings/apps
     2. Set the CLICKUP_API_KEY environment variable:
@@ -73,6 +78,8 @@ ${YELLOW}NOTES:${NC}
     - List ID can be provided via environment variable, command-line option, or argument
     - Command-line list ID takes precedence over environment variable
     - Use --dry-run to preview changes before applying them
+    - The script updates a custom field (PM.Prio by default), not task names
+    - Ensure the custom field exists on all tasks before running
 
 EOF
 }
@@ -80,6 +87,7 @@ EOF
 # Initialize variables
 DRY_RUN=""
 LIST_ID_ARG=""
+FIELD_NAME="PM.Prio"
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -94,6 +102,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -l|--list-id)
             LIST_ID_ARG="$2"
+            shift 2
+            ;;
+        -f|--field-name)
+            FIELD_NAME="$2"
             shift 2
             ;;
         -*)
@@ -164,6 +176,7 @@ fi
 echo -e "${BLUE}ClickUp Task Numbering${NC}"
 echo -e "${BLUE}=====================${NC}"
 echo "List ID: $LIST_ID"
+echo "Custom Field: $FIELD_NAME"
 if [ -n "$DRY_RUN" ]; then
     echo -e "Mode: ${YELLOW}DRY RUN (no changes will be made)${NC}"
 else
@@ -175,4 +188,5 @@ echo ""
 python3 "$PYTHON_SCRIPT" \
     --api-token "$CLICKUP_API_KEY" \
     --list-id "$LIST_ID" \
+    --field-name "$FIELD_NAME" \
     $DRY_RUN
