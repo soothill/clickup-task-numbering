@@ -86,7 +86,7 @@ class ClickUpNumbering:
                 return field
         return None
 
-    def update_custom_field(self, task_id: str, field_id: str, value: str, field_type: str = None) -> bool:
+    def update_custom_field(self, task_id: str, field_id: str, value: str, field_type: str = None, type_config: dict = None) -> bool:
         """
         Update a task's custom field value.
 
@@ -95,11 +95,22 @@ class ClickUpNumbering:
             field_id: The ID of the custom field
             value: The new value for the custom field
             field_type: The type of the custom field (optional, for proper formatting)
+            type_config: The type configuration (for dropdown/select fields)
 
         Returns:
             True if successful, False otherwise
         """
         url = f"{self.base_url}/task/{task_id}/field/{field_id}"
+
+        # Check if this is a dropdown/select field with predefined options
+        if type_config and 'options' in type_config and len(type_config['options']) > 0:
+            # This is a dropdown field - we cannot use arbitrary text values
+            raise ValueError(
+                f"Field type '{field_type}' has predefined options and cannot accept arbitrary values. "
+                f"Please either:\n"
+                f"  1. Change the field to a plain text field (remove options) in ClickUp, OR\n"
+                f"  2. Use a different custom field without predefined options"
+            )
 
         # Format value based on field type
         # For number fields, convert to numeric type
@@ -220,6 +231,7 @@ class ClickUpNumbering:
 
             field_id = field_info.get("id")
             field_type = field_info.get("type")
+            type_config = field_info.get("type_config", {})
 
             # Get current and new values for the epic
             current_value = self.get_custom_field_value(epic, field_name)
@@ -232,7 +244,7 @@ class ClickUpNumbering:
 
             if not dry_run:
                 try:
-                    self.update_custom_field(epic["id"], field_id, new_value, field_type)
+                    self.update_custom_field(epic["id"], field_id, new_value, field_type, type_config)
                     print(f"  ✓ Updated")
                 except Exception as e:
                     print(f"  ✗ Error: {str(e)}")
@@ -250,6 +262,7 @@ class ClickUpNumbering:
 
                 subtask_field_id = subtask_field_info.get("id")
                 subtask_field_type = subtask_field_info.get("type")
+                subtask_type_config = subtask_field_info.get("type_config", {})
 
                 current_subtask_value = self.get_custom_field_value(subtask, field_name)
                 new_subtask_value = f"{epic_number}.{idx}"
@@ -261,7 +274,7 @@ class ClickUpNumbering:
 
                 if not dry_run:
                     try:
-                        self.update_custom_field(subtask["id"], subtask_field_id, new_subtask_value, subtask_field_type)
+                        self.update_custom_field(subtask["id"], subtask_field_id, new_subtask_value, subtask_field_type, subtask_type_config)
                         print(f"    ✓ Updated")
                     except Exception as e:
                         print(f"    ✗ Error: {str(e)}")
