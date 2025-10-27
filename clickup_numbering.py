@@ -69,7 +69,24 @@ class ClickUpNumbering:
                 return field.get("id")
         return None
 
-    def update_custom_field(self, task_id: str, field_id: str, value: str) -> bool:
+    def get_custom_field_info(self, task: Dict, field_name: str) -> Optional[Dict]:
+        """
+        Get the full custom field info by name.
+
+        Args:
+            task: The task dictionary containing custom fields
+            field_name: The name of the custom field to find
+
+        Returns:
+            The field dictionary if found, None otherwise
+        """
+        custom_fields = task.get("custom_fields", [])
+        for field in custom_fields:
+            if field.get("name") == field_name:
+                return field
+        return None
+
+    def update_custom_field(self, task_id: str, field_id: str, value: str, field_type: str = None) -> bool:
         """
         Update a task's custom field value.
 
@@ -77,12 +94,28 @@ class ClickUpNumbering:
             task_id: The ID of the task
             field_id: The ID of the custom field
             value: The new value for the custom field
+            field_type: The type of the custom field (optional, for proper formatting)
 
         Returns:
             True if successful, False otherwise
         """
         url = f"{self.base_url}/task/{task_id}/field/{field_id}"
-        data = {"value": value}
+
+        # Format value based on field type
+        # For number fields, convert to numeric type
+        if field_type == "number":
+            try:
+                # Try to parse as float first, then int if it's a whole number
+                numeric_value = float(value)
+                if numeric_value.is_integer():
+                    numeric_value = int(numeric_value)
+                data = {"value": numeric_value}
+            except ValueError:
+                # If conversion fails, send as string
+                data = {"value": value}
+        else:
+            # For text and other field types, send as string
+            data = {"value": value}
 
         response = requests.post(url, headers=self.headers, json=data)
         response.raise_for_status()
@@ -177,13 +210,16 @@ class ClickUpNumbering:
             epic = epic_data["task"]
             subtasks = epic_data["subtasks"]
 
-            # Get the custom field ID for this epic
-            field_id = self.get_custom_field_id(epic, field_name)
-            if not field_id:
+            # Get the custom field info for this epic
+            field_info = self.get_custom_field_info(epic, field_name)
+            if not field_info:
                 print(f"⚠ Warning: Custom field '{field_name}' not found on epic '{epic['name']}'")
                 print(f"  Skipping epic and its subtasks\n")
                 epic_number += 10
                 continue
+
+            field_id = field_info.get("id")
+            field_type = field_info.get("type")
 
             # Get current and new values for the epic
             current_value = self.get_custom_field_value(epic, field_name)
@@ -192,10 +228,11 @@ class ClickUpNumbering:
             print(f"Epic {epic_number}: {epic['name']}")
             print(f"  Current {field_name}: {current_value if current_value else '(empty)'}")
             print(f"  New {field_name}: {new_value}")
+            print(f"  Field type: {field_type}")
 
             if not dry_run:
                 try:
-                    self.update_custom_field(epic["id"], field_id, new_value)
+                    self.update_custom_field(epic["id"], field_id, new_value, field_type)
                     print(f"  ✓ Updated")
                 except Exception as e:
                     print(f"  ✗ Error: {str(e)}")
@@ -204,12 +241,15 @@ class ClickUpNumbering:
 
             # Number the subtasks
             for idx, subtask in enumerate(subtasks, start=1):
-                # Get the custom field ID for this subtask
-                subtask_field_id = self.get_custom_field_id(subtask, field_name)
-                if not subtask_field_id:
+                # Get the custom field info for this subtask
+                subtask_field_info = self.get_custom_field_info(subtask, field_name)
+                if not subtask_field_info:
                     print(f"  ⚠ Warning: Custom field '{field_name}' not found on task '{subtask['name']}'")
                     print(f"    Skipping task")
                     continue
+
+                subtask_field_id = subtask_field_info.get("id")
+                subtask_field_type = subtask_field_info.get("type")
 
                 current_subtask_value = self.get_custom_field_value(subtask, field_name)
                 new_subtask_value = f"{epic_number}.{idx}"
@@ -217,10 +257,11 @@ class ClickUpNumbering:
                 print(f"  Task {epic_number}.{idx}: {subtask['name']}")
                 print(f"    Current {field_name}: {current_subtask_value if current_subtask_value else '(empty)'}")
                 print(f"    New {field_name}: {new_subtask_value}")
+                print(f"    Field type: {subtask_field_type}")
 
                 if not dry_run:
                     try:
-                        self.update_custom_field(subtask["id"], subtask_field_id, new_subtask_value)
+                        self.update_custom_field(subtask["id"], subtask_field_id, new_subtask_value, subtask_field_type)
                         print(f"    ✓ Updated")
                     except Exception as e:
                         print(f"    ✗ Error: {str(e)}")
