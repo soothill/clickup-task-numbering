@@ -128,10 +128,24 @@ class ClickUpNumbering:
             # For text and other field types, send as string
             data = {"value": value}
 
-        response = requests.post(url, headers=self.headers, json=data)
-        response.raise_for_status()
+        # Debug output
+        print(f"    [DEBUG] Sending to {url}")
+        print(f"    [DEBUG] Data: {data}")
 
-        return response.status_code == 200
+        try:
+            response = requests.post(url, headers=self.headers, json=data)
+            response.raise_for_status()
+            return response.status_code == 200
+        except requests.exceptions.HTTPError as e:
+            # Try to get more details from the response
+            error_detail = ""
+            try:
+                error_json = response.json()
+                error_detail = f"\nAPI Error: {error_json}"
+            except:
+                error_detail = f"\nResponse Text: {response.text}"
+
+            raise Exception(f"{str(e)}{error_detail}")
     
     def organize_tasks_by_hierarchy(self, tasks: List[Dict]) -> Dict:
         """
